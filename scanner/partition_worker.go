@@ -40,15 +40,18 @@ type PartitionWorkerResult struct {
 	errors   map[string]int
 }
 
-func (w *PartitionWorker) Do(ctx context.Context, item interface{}) (interface{}, error) {
-	tokenRange := item.(tokenRange)
-	fmt.Printf("Processing token range %d to %d\n", tokenRange.start, tokenRange.end)
+func (w *PartitionWorker) getQuery() string {
 	extraColumnsArg := ""
 	if len(w.extraColumns) > 0 {
 		extraColumnsArg = ", " + strings.Join(w.extraColumns, ", ")
 	}
-	query := fmt.Sprintf(queryTemplate, w.partitionKey, w.partitionKey, extraColumnsArg, w.keyspace, w.table, w.partitionKey, w.partitionKey)
-	iter := w.session.Query(query, tokenRange.start, tokenRange.end).Iter()
+	return fmt.Sprintf(queryTemplate, w.partitionKey, w.partitionKey, extraColumnsArg, w.keyspace, w.table, w.partitionKey, w.partitionKey)
+}
+
+func (w *PartitionWorker) Do(ctx context.Context, item interface{}) (interface{}, error) {
+	tokenRange := item.(tokenRange)
+	fmt.Printf("Processing token range %d to %d\n", tokenRange.start, tokenRange.end)
+	iter := w.session.Query(w.getQuery(), tokenRange.start, tokenRange.end).Iter()
 	var modifiedCounter uint64
 	errorCounter := make(map[string]int)
 	for {
