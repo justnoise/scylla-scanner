@@ -1,4 +1,4 @@
-package main
+package scanner
 
 import (
 	"context"
@@ -28,7 +28,7 @@ func NewScanner(session *gocql.Session, callback PartitionCallback, keyspace, ta
 	}
 }
 
-func (s *Scanner) Scan() {
+func (s *Scanner) Scan(numWorkers int) {
 	producer := &TokenRangeProducer{
 		numTokenRanges: uint64(numWorkers * 300),
 	}
@@ -46,5 +46,7 @@ func (s *Scanner) Scan() {
 		panic(err)
 	}
 	fmt.Printf("Modified: %d", resultHandler.modified)
-	fmt.Printf("Errors: %d", resultHandler.errors)
+	for k, v := range resultHandler.errors {
+		fmt.Printf("Error: %s: %d", k, v)
+	}
 }

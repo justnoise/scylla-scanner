@@ -5,12 +5,16 @@ import (
 	"time"
 
 	"github.com/gocql/gocql"
+	"github.com/justnoise/scylla-scanner/scanner"
 )
 
 var (
 	clusterTimeout  = 20000
 	clusterPageSize = 5000
 	numWorkers      = 10
+	hosts           = []string{}
+	username        = ""
+	password        = ""
 )
 
 // include flags
@@ -21,6 +25,7 @@ var (
 // keyspace
 // -- workers
 // -- table
+// -- extraColumns
 
 func getScyllaClient(hosts []string, username, password string) (*gocql.Session, error) {
 	cluster := gocql.NewCluster(hosts...)
@@ -47,5 +52,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	scanner := NewScanner(session, partitionCounter, keyspace, table, partitionKey, []string{})
+	scanner := scanner.NewScanner(session, partitionCounter, keyspace, table, partitionKey, []string{})
+	scanner.Scan(numWorkers)
 }

@@ -1,10 +1,9 @@
-package main
+package scanner
 
 import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/gocql/gocql"
 )
@@ -68,26 +67,4 @@ func (w *PartitionWorker) Do(ctx context.Context, item interface{}) (interface{}
 		modified: modifiedCounter,
 		errors:   errorCounter,
 	}, nil
-}
-
-type PartitionWorkerResultSummer struct {
-	mu       sync.Mutex
-	modified uint64
-	errors   map[string]int
-}
-
-func NewPartitionWorkerResultSummer() *PartitionWorkerResultSummer {
-	return &PartitionWorkerResultSummer{
-		errors: make(map[string]int),
-	}
-}
-
-func (r *PartitionWorkerResultSummer) Handle(ctx context.Context, iResult interface{}, err error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	result := iResult.(PartitionWorkerResult)
-	r.modified += result.modified
-	for msg, count := range result.errors {
-		r.errors[msg] += count
-	}
 }
