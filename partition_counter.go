@@ -10,19 +10,20 @@ import (
 )
 
 const (
-	queryTemplate = "SELECT token(key) FROM %s.%s WHERE token(key) >= ? AND token(key) <= ?"
+	queryTemplate = "SELECT DISTINCT token(%s), %s FROM %s.%s WHERE token(%s) >= ? AND token(%s) <= ?"
 )
 
 type PartitionCounter struct {
-	keyspace string
-	table    string
-	session  *gocql.Session
+	keyspace     string
+	table        string
+	partitionKey string
+	session      *gocql.Session
 }
 
 func (w *PartitionCounter) Do(ctx context.Context, item interface{}) (interface{}, error) {
 	tokenRange := item.(tokenRange)
 	fmt.Printf("Processing token range %d to %d\n", tokenRange.start, tokenRange.end)
-	query := fmt.Sprintf(queryTemplate, w.keyspace, w.table)
+	query := fmt.Sprintf(queryTemplate, w.partitionKey, w.partitionKey, w.keyspace, w.table, w.partitionKey, w.partitionKey)
 	scanner := w.session.Query(query, tokenRange.start, tokenRange.end).Iter().Scanner()
 	var rowCount, errorCount uint64
 	var token int64
