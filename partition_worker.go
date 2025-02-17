@@ -3,28 +3,52 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync"
 
 	"github.com/gocql/gocql"
 )
 
-// Calls callback with the results of the scan on the given partition
+const (
+	queryTemplate = "SELECT DISTINCT token(%s), %s%s FROM %s.%s WHERE token(%s) >= ? AND token(%s) <= ?"
+)
+
+type PartitionCallback func(context.Context, map[string]interface{}) (int, error)
+
+// Calls callback with each row of the scan
 type PartitionWorker struct {
-	callback     func(context.Context, map[string]interface{}) (int, error)
+	callback     PartitionCallback
+	session      *gocql.Session
 	keyspace     string
 	table        string
 	partitionKey string
-	session      *gocql.Session
+	extraColumns []string
+}
+
+func NewPartitionWorker(callback PartitionCallback, session *gocql.Session, keyspace, table, partitionKey string, extraColumns []string) *PartitionWorker {
+	return &PartitionWorker{
+		callback:     callback,
+		session:      session,
+		keyspace:     keyspace,
+		table:        table,
+		partitionKey: partitionKey,
+		extraColumns: extraColumns,
+	}
 }
 
 type PartitionWorkerResult struct {
-	Modified uint64
-	Errors   map[string]int
+	modified uint64
+	errors   map[string]int
 }
 
 func (w *PartitionWorker) Do(ctx context.Context, item interface{}) (interface{}, error) {
 	tokenRange := item.(tokenRange)
 	fmt.Printf("Processing token range %d to %d\n", tokenRange.start, tokenRange.end)
-	query := fmt.Sprintf(queryTemplate, w.partitionKey, w.partitionKey, w.keyspace, w.table, w.partitionKey, w.partitionKey)
+	extraColumnsArg := ""
+	if len(w.extraColumns) > 0 {
+		extraColumnsArg = ", " + strings.Join(w.extraColumns, ", ")
+	}
+	query := fmt.Sprintf(queryTemplate, w.partitionKey, w.partitionKey, extraColumnsArg, w.keyspace, w.table, w.partitionKey, w.partitionKey)
 	iter := w.session.Query(query, tokenRange.start, tokenRange.end).Iter()
 	var modifiedCounter uint64
 	errorCounter := make(map[string]int)
@@ -41,7 +65,29 @@ func (w *PartitionWorker) Do(ctx context.Context, item interface{}) (interface{}
 		}
 	}
 	return PartitionWorkerResult{
-		Modified: modifiedCounter,
-		Errors:   errorCounter,
+		modified: modifiedCounter,
+		errors:   errorCounter,
 	}, nil
+}
+
+type PartitionWorkerResultSummer struct {
+	mu       sync.Mutex
+	modified uint64
+	errors   map[string]int
+}
+
+func NewPartitionWorkerResultSummer() *PartitionWorkerResultSummer {
+	return &PartitionWorkerResultSummer{
+		errors: make(map[string]int),
+	}
+}
+
+func (r *PartitionWorkerResultSummer) Handle(ctx context.Context, iResult interface{}, err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	result := iResult.(PartitionWorkerResult)
+	r.modified += result.modified
+	for msg, count := range result.errors {
+		r.errors[msg] += count
+	}
 }

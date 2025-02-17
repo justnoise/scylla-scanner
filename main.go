@@ -2,11 +2,9 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/gocql/gocql"
-	"github.com/justnoise/parallel"
 )
 
 var (
@@ -37,22 +35,17 @@ func getScyllaClient(hosts []string, username, password string) (*gocql.Session,
 	return cluster.CreateSession()
 }
 
+func partitionCounter(ctx context.Context, row map[string]interface{}) (int, error) {
+	return 1, nil
+}
+
 func main() {
-	producer := &TokenRangeProducer{
-		numTokenRanges: uint64(numWorkers * 300),
-	}
-	workers := make([]parallel.Executor, numWorkers)
-	for i := 0; i < numWorkers; i++ {
-		workers[i] = &PartitionCounter{}
-	}
-	resultHandler := &PartitionCounterResultSummer{}
-	workQueue := parallel.NewChanWorkQueue(numWorkers)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	runner := parallel.NewParallelRunner(producer, workers, resultHandler, workQueue)
-	err := runner.Run(ctx)
+	keyspace := "system"
+	table := "compaction_history"
+	partitionKey := "id"
+	session, err := getScyllaClient(hosts, username, password)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("Rows: %d, Errors: %d", resultHandler.rows, resultHandler.errors)
+	scanner := NewScanner(session, partitionCounter, keyspace, table, partitionKey, []string{})
 }

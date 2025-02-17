@@ -9,10 +9,6 @@ import (
 	"github.com/gocql/gocql"
 )
 
-const (
-	queryTemplate = "SELECT DISTINCT token(%s), %s FROM %s.%s WHERE token(%s) >= ? AND token(%s) <= ?"
-)
-
 type PartitionCounter struct {
 	keyspace     string
 	table        string
