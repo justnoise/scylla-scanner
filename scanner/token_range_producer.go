@@ -35,8 +35,8 @@ func (p *TokenRangeProducer) Produce(ctx context.Context, workQueue parallel.Wor
 		tokenRanges[i] = item
 	}
 	// Shuffle the token ranges to distribute work across the cluster/shards
-	for i := uint64(0); i < p.numTokenRanges; i++ {
-		j := i + uint64(rand.Intn(int(p.numTokenRanges-i)))
+	for i := len(tokenRanges) - 1; i > 0; i-- {
+		j := rand.Intn(i + 1)
 		tokenRanges[i], tokenRanges[j] = tokenRanges[j], tokenRanges[i]
 	}
 	for _, item := range tokenRanges {
