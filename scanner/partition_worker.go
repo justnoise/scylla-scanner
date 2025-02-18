@@ -3,71 +3,42 @@ package scanner
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/gocql/gocql"
 )
 
-const (
-	queryTemplate = "SELECT DISTINCT token(%s), %s%s FROM %s.%s WHERE token(%s) >= ? AND token(%s) <= ?"
-)
+type PartitionCallback func(context.Context, map[string]interface{}) (interface{}, error)
 
-type PartitionCallback func(context.Context, map[string]interface{}) (int, error)
-
-// Calls callback with each row of the scan
+// The PartitionWorker calls the callback with each row of the scan. Results are aggregated
+// into the results object that's created by ResultFactory.
 type PartitionWorker struct {
-	callback     PartitionCallback
-	session      *gocql.Session
-	keyspace     string
-	table        string
-	partitionKey string
-	extraColumns []string
+	callback      PartitionCallback
+	session       *gocql.Session
+	queryBuilder  QueryBuilder
+	resultFactory ResultFactory
 }
 
-func NewPartitionWorker(callback PartitionCallback, session *gocql.Session, keyspace, table, partitionKey string, extraColumns []string) *PartitionWorker {
+func NewPartitionWorker(callback PartitionCallback, session *gocql.Session, queryBuilder QueryBuilder, resultFactory ResultFactory) *PartitionWorker {
 	return &PartitionWorker{
-		callback:     callback,
-		session:      session,
-		keyspace:     keyspace,
-		table:        table,
-		partitionKey: partitionKey,
-		extraColumns: extraColumns,
+		callback:      callback,
+		session:       session,
+		queryBuilder:  queryBuilder,
+		resultFactory: resultFactory,
 	}
-}
-
-type PartitionWorkerResult struct {
-	modified uint64
-	errors   map[string]int
-}
-
-func (w *PartitionWorker) getQuery() string {
-	extraColumnsArg := ""
-	if len(w.extraColumns) > 0 {
-		extraColumnsArg = ", " + strings.Join(w.extraColumns, ", ")
-	}
-	return fmt.Sprintf(queryTemplate, w.partitionKey, w.partitionKey, extraColumnsArg, w.keyspace, w.table, w.partitionKey, w.partitionKey)
 }
 
 func (w *PartitionWorker) Do(ctx context.Context, item interface{}) (interface{}, error) {
 	tokenRange := item.(tokenRange)
 	fmt.Printf("Processing token range %d to %d\n", tokenRange.start, tokenRange.end)
-	iter := w.session.Query(w.getQuery(), tokenRange.start, tokenRange.end).Iter()
-	var modifiedCounter uint64
-	errorCounter := make(map[string]int)
+	iter := w.session.Query(w.queryBuilder.Build(), tokenRange.start, tokenRange.end).Iter()
+	result := w.resultFactory()
 	for {
 		row := make(map[string]interface{})
 		if !iter.MapScan(row) {
 			break
 		}
 		modified, err := w.callback(ctx, row)
-		if err != nil {
-			errorCounter[err.Error()]++
-		} else {
-			modifiedCounter += uint64(modified)
-		}
+		result.Add(modified, err)
 	}
-	return PartitionWorkerResult{
-		modified: modifiedCounter,
-		errors:   errorCounter,
-	}, nil
+	return result, nil
 }

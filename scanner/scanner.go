@@ -9,34 +9,39 @@ import (
 )
 
 type Scanner struct {
-	callback     PartitionCallback
-	session      *gocql.Session
-	keyspace     string
-	table        string
-	partitionKey string
-	extraColumns []string
+	callback      PartitionCallback
+	session       *gocql.Session
+	queryBuilder  QueryBuilder
+	resultFactory ResultFactory
 }
 
-func NewScanner(session *gocql.Session, callback PartitionCallback, keyspace, table, partitionKey string, extraColumns []string) *Scanner {
+func NewBasicScanner(session *gocql.Session, callback PartitionCallback, keyspace, table, partitionKey string) *Scanner {
+	queryBuilder := &BasicQueryBuilder{
+		Keyspace:     keyspace,
+		Table:        table,
+		PartitionKey: partitionKey,
+	}
+	return NewScanner(session, callback, queryBuilder, NewIntResult)
+}
+
+func NewScanner(session *gocql.Session, callback PartitionCallback, queryBuilder QueryBuilder, resultFactory ResultFactory) *Scanner {
 	return &Scanner{
-		callback:     callback,
-		session:      session,
-		keyspace:     keyspace,
-		table:        table,
-		partitionKey: partitionKey,
-		extraColumns: extraColumns,
+		callback:      callback,
+		session:       session,
+		queryBuilder:  queryBuilder,
+		resultFactory: resultFactory,
 	}
 }
 
 func (s *Scanner) Scan(numWorkers int) {
 	producer := &TokenRangeProducer{
-		numTokenRanges: uint64(numWorkers * 300),
+		numTokenRanges: uint64(numWorkers * 1000),
 	}
 	workers := make([]parallel.Executor, numWorkers)
 	for i := 0; i < numWorkers; i++ {
-		workers[i] = NewPartitionWorker(s.callback, s.session, s.keyspace, s.table, s.partitionKey, s.extraColumns)
+		workers[i] = NewPartitionWorker(s.callback, s.session, s.queryBuilder, s.resultFactory)
 	}
-	resultHandler := NewPartitionWorkerResultSummer()
+	resultHandler := s.resultFactory()
 	workQueue := parallel.NewChanWorkQueue(numWorkers)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -45,8 +50,5 @@ func (s *Scanner) Scan(numWorkers int) {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("Modified: %d", resultHandler.modified)
-	for k, v := range resultHandler.errors {
-		fmt.Printf("Error: %s: %d", k, v)
-	}
+	fmt.Println(resultHandler.String())
 }
