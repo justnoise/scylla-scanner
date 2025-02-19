@@ -8,6 +8,10 @@ import (
 	"github.com/justnoise/parallel"
 )
 
+var (
+	WorkItemsPerWorker = 300
+)
+
 type Scanner struct {
 	callback      PartitionCallback
 	session       *gocql.Session
@@ -35,7 +39,7 @@ func NewScanner(session *gocql.Session, callback PartitionCallback, queryBuilder
 
 func (s *Scanner) Scan(numWorkers int) {
 	producer := &TokenRangeProducer{
-		numTokenRanges: uint64(numWorkers * 1000),
+		numTokenRanges: uint64(numWorkers * WorkItemsPerWorker),
 	}
 	workers := make([]parallel.Executor, numWorkers)
 	for i := 0; i < numWorkers; i++ {

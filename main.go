@@ -13,13 +13,13 @@ var (
 	clusterTimeout  = 20000
 	clusterPageSize = 5000
 	opts            struct {
-		NumWorkers   int      `short:"w" long:"workers" description:"Number of workers to use" default:"48" env:"WORKERS"`
-		Hosts        []string `short:"h" long:"hosts" description:"Comma separated list of scylla hosts" env:HOSTS env-delim:"," required:"true"`
-		Username     string   `short:"u" long:"scylla-user" description:"Scylla username" env:"USERNAME"`
-		Password     string   `short:"p" long:"password"  description:"Scylla password" env:"PASSWORD"`
-		Keyspace     string   `short:"k" long:"keyspace"  description:"keyspace that contains the table to scan" env:"KEYSPACE" required:"true"`
-		Table        string   `short:"t" long:"table"  description:"name of the table to scan" env:"TABLE" required:"true"`
-		PartitionKey string   `short:"p" long:"partition-key"  description:"comma separated list of columns in the table's partition key" env:"PARTITION_KEY" required:"true"`
+		NumWorkers   int      `short:"w" long:"num-workers" description:"Number of workers to use" default:"48" env:"NUM_WORKERS"`
+		Hosts        []string `short:"h" long:"hosts" description:"Comma separated list of scylla hosts" env:"SCYLLA_HOSTS" env-delim:"," required:"true"`
+		Username     string   `short:"u" long:"username" description:"Scylla username" env:"SCYLLA_USERNAME"`
+		Password     string   `short:"p" long:"password" description:"Scylla password" env:"SCYLLA_PASSWORD"`
+		Keyspace     string   `short:"k" long:"keyspace" description:"keyspace that contains the table to scan" env:"SCYLLA_KEYSPACE" required:"true"`
+		Table        string   `short:"t" long:"table" description:"name of the table to scan" env:"SCYLLA_TABLE" required:"true"`
+		PartitionKey string   `long:"partition-key" description:"comma separated list of columns in the table's partition key" env:"PARTITION_KEY" required:"true"`
 	}
 )
 
@@ -36,8 +36,8 @@ func getScyllaClient(hosts []string, username, password string) (*gocql.Session,
 }
 
 func partitionCounter(ctx context.Context, row map[string]interface{}) (interface{}, error) {
-	val := 1
-	return &val, nil
+	val := uint64(1)
+	return val, nil
 }
 
 func main() {
