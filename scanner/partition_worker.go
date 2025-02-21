@@ -30,15 +30,15 @@ func NewPartitionWorker(callback PartitionCallback, session *gocql.Session, quer
 func (w *PartitionWorker) Do(ctx context.Context, item interface{}) (interface{}, error) {
 	tokenRange := item.(tokenRange)
 	fmt.Printf("Processing token range %d to %d\n", tokenRange.start, tokenRange.end)
-	iter := w.session.Query(w.queryBuilder.Build(), tokenRange.start, tokenRange.end).Iter()
+	iter := w.session.Query(w.queryBuilder.Build(), tokenRange.start, tokenRange.end).Consistency(gocql.One).Iter()
 	result := w.resultFactory()
 	for {
 		row := make(map[string]interface{})
 		if !iter.MapScan(row) {
 			break
 		}
-		modified, err := w.callback(ctx, row)
-		result.Add(modified, err)
+		callbackResult, err := w.callback(ctx, row)
+		result.Add(callbackResult, err)
 	}
 	return result, nil
 }

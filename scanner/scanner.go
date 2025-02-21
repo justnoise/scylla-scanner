@@ -45,7 +45,9 @@ func (s *Scanner) Scan(numWorkers int) {
 	for i := 0; i < numWorkers; i++ {
 		workers[i] = NewPartitionWorker(s.callback, s.session, s.queryBuilder, s.resultFactory)
 	}
-	resultHandler := s.resultFactory()
+	resultHandler := &WorkerResultHandler{
+		UserResult: s.resultFactory(),
+	}
 	workQueue := parallel.NewChanWorkQueue(numWorkers)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -54,5 +56,5 @@ func (s *Scanner) Scan(numWorkers int) {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(resultHandler.String())
+	fmt.Println(resultHandler.UserResult.String())
 }
